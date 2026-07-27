@@ -1,0 +1,85 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  triage:
+    if: github.event.sender.type != 'Bot'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Issue Triage
+        id: claude-triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          claude_args: |
+            --allowed-tools "Bash(gh issue view:*),Bash(gh label list:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Read,Grep,Glob"
+
+          prompt: |
+            Eres un asistente de triaje de issues para el repositorio ${{ github.repository }},
+            un juego de Tetris en JavaScript vanilla (HTML5 Canvas, sin build ni tests) cuyo
+            código principal está en game.js, index.html y style.css.
+
+            Se acaba de abrir o editar el issue #${{ github.event.issue.number }}. Tu tarea:
+
+            1. Ejecuta `gh label list` para ver los labels disponibles en el repo. SOLO puedes
+               usar labels que ya existan en esa lista. Nunca crees labels nuevos. Si ninguno
+               encaja bien, no apliques ninguno y dilo explícitamente en el comentario.
+
+            2. Ejecuta `gh issue view ${{ github.event.issue.number }}` para leer el título y
+               cuerpo completo del issue.
+
+            3. Investiga el código relevante con Grep/Read (game.js, index.html, style.css)
+               antes de opinar. No asumas causas sin haber mirado el código real.
+
+            4. Aplica los labels que correspondan con:
+               `gh issue edit ${{ github.event.issue.number }} --add-label "label1,label2"`
+               (omite este paso si no aplica ninguno).
+
+            5. Publica un comentario de diagnóstico con:
+               `gh issue comment ${{ github.event.issue.number }} --body-file <archivo>`
+               usando exactamente este formato:
+
+               ## 🤖 Diagnóstico automático
+
+               **Tipo:** bug | mejora | feature | pregunta | docs
+               **Labels aplicados:** `x`, `y` (o "ninguno")
+
+               ### Resumen
+               <2-3 líneas: qué pide o reporta el issue>
+
+               ### Análisis técnico
+               <causa probable; comportamiento actual vs. esperado, con referencia al código>
+
+               ### Archivos y funciones implicadas
+               - `archivo:línea aprox` — `función` — por qué es relevante
+
+               ### Enfoque de solución propuesto
+               1. ...
+               2. ...
+
+               ### Riesgos / cosas a verificar
+               - ...
+
+               ### Información faltante
+               - ... (o "ninguna")
+
+               ---
+               *Análisis generado automáticamente. Puede contener errores.*
+
+            IMPORTANTE: Solo diagnostica. No escribas código de solución, no hagas commits,
+            no abras pull requests. El objetivo de este análisis es servir de base para que
+            el equipo implemente la solución después.
